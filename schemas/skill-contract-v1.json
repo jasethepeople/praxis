@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://praxis.local/schemas/skill-contract-v1.json",
+  "title": "Praxis skill contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "schema_version", "agentbook_state", "risk_tier", "domain", "name", "description", "trigger", "workflow", "constraints", "forbidden_actions", "output_spec", "provenance"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^skill_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "schema_version": { "const": "skill-contract-v1" },
+    "agentbook_state": { "enum": ["draft", "validated", "canonical", "deprecated", "quarantined"] },
+    "risk_tier": { "type": "integer", "minimum": 0, "maximum": 2 },
+    "domain": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "lexical_hints"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "lexical_hints": { "type": "array", "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 1000 } },
+        "embedding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model", "model_sha", "dims"],
+          "properties": {
+            "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "model_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "dims": { "type": "integer", "minimum": 1, "maximum": 8192 },
+            "vector": { "type": "array", "maxItems": 8192, "items": { "type": "number" } }
+          }
+        }
+      }
+    },
+    "workflow": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tool_id", "action"],
+        "properties": {
+          "tool_id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,159}$" },
+          "action": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "failure_policy": { "type": "string", "enum": ["stop", "retry_once", "continue"] },
+          "input": { "type": "object", "maxProperties": 128 }
+        }
+      }
+    },
+    "constraints": { "type": "array", "maxItems": 128, "items": { "type": "string", "minLength": 1, "maxLength": 1000 } },
+    "forbidden_actions": { "type": "array", "maxItems": 128, "items": { "type": "string", "minLength": 1, "maxLength": 1000 } },
+    "output_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "anyOf": [
+        { "required": ["schema"] },
+        { "required": ["assertions"], "properties": { "assertions": { "type": "array", "minItems": 1 } } },
+        { "required": ["required_artifacts"], "properties": { "required_artifacts": { "type": "array", "minItems": 1 } } }
+      ],
+      "properties": {
+        "schema": { "type": "object", "maxProperties": 128 },
+        "assertions": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "op"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "op": { "enum": ["exists", "equals", "contains", "gte", "lte"] },
+              "expected": {}
+            }
+          }
+        },
+        "required_artifacts": { "type": "array", "maxItems": 128, "items": { "type": "string", "minLength": 1, "maxLength": 512 } }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trajectory_hashes", "extraction_model_sha", "sanitizer_version", "evidence_refs", "eval_suites", "human_approvers"],
+      "properties": {
+        "trajectory_hashes": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" } },
+        "extraction_model_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "sanitizer_version": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "access", "retrieved_at"],
+            "properties": {
+              "source": { "enum": ["openalex", "crossref", "unpaywall", "arxiv", "github", "nvd", "exploit_db", "annas_metadata", "local"] },
+              "access": { "enum": ["oa_pdf", "preprint", "abstract_only", "metadata_only", "no_access", "local"] },
+              "title": { "type": "string", "maxLength": 1000 },
+              "doi": { "type": "string", "maxLength": 300 },
+              "url": { "type": "string", "maxLength": 2048 },
+              "retrieved_at": { "type": "string", "maxLength": 40 },
+              "content_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+              "metadata": { "type": "object", "maxProperties": 128 }
+            },
+            "allOf": [
+              {
+                "if": { "properties": { "source": { "const": "local" } }, "required": ["source"] },
+                "then": { "required": ["content_sha256"], "properties": { "access": { "const": "local" } }, "not": { "anyOf": [{ "required": ["url"] }, { "required": ["doi"] }] } }
+              },
+              {
+                "if": { "not": { "properties": { "source": { "const": "local" } }, "required": ["source"] } },
+                "then": { "not": { "required": ["content_sha256"] } }
+              },
+              {
+                "if": { "properties": { "access": { "const": "local" } }, "required": ["access"] },
+                "then": { "properties": { "source": { "const": "local" } } }
+              }
+            ]
+          }
+        },
+        "eval_suites": { "type": "array", "maxItems": 64, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 160 } },
+        "human_approvers": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$" } }
+      }
+    },
+    "supersedes": { "type": "string", "pattern": "^skill_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "molts_event_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

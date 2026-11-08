@@ -1,0 +1,13 @@
+node_modules
+.build
+coverage
+data
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+**/*.test.ts
+**/*.log
+**/*.sqlite*
+**/*.pem

@@ -1,0 +1,14 @@
+node_modules/
+.build/
+coverage/
+data/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.pem
+*.key
+*.log
+.DS_Store

@@ -1,0 +1,33 @@
+services:
+  praxis:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "8787"
+      PRAXIS_BIND_HOST: "0.0.0.0"
+      PRAXIS_DATA_DIR: /data
+      PRAXIS_PUBLIC_BEHIND_TLS: "true"
+    ports:
+      - "127.0.0.1:${PRAXIS_HOST_PORT:-8787}:8787"
+    volumes:
+      - praxis-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 1g
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8787/readyz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  praxis-data:
+    name: praxis-data
