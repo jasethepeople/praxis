@@ -6,7 +6,7 @@ import { canonicalJson } from "./canonical";
 
 const skillIdPattern = /^skill_[0-9A-HJKMNP-TV-Z]{26}$/;
 const sha256Pattern = /^sha256:[0-9a-f]{64}$/i;
-const modelShaPattern = /^[0-9a-f]{40}$/i;
+const modelShaPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
 const evidenceSources = new Set(["openalex", "crossref", "unpaywall", "arxiv", "github", "nvd", "exploit_db", "annas_metadata", "local"]);
 const evidenceAccess = new Set(["oa_pdf", "preprint", "abstract_only", "metadata_only", "no_access", "local"]);
 const ajv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
@@ -102,7 +102,7 @@ export function validateContract(value: unknown): { valid: boolean; errors: stri
   if (!isRecord(v.provenance)) errors.push("provenance must be an object");
   else {
     if (!Array.isArray(v.provenance.trajectory_hashes) || !v.provenance.trajectory_hashes.every((x) => typeof x === "string" && sha256Pattern.test(x))) errors.push("provenance.trajectory_hashes must contain sha256 hashes");
-    if (typeof v.provenance.extraction_model_sha !== "string" || !modelShaPattern.test(v.provenance.extraction_model_sha)) errors.push("provenance.extraction_model_sha must be a 40-character SHA");
+    if (typeof v.provenance.extraction_model_sha !== "string" || !modelShaPattern.test(v.provenance.extraction_model_sha)) errors.push("provenance.extraction_model_sha must be a 40- or 64-character hex digest");
     if (!string(v.provenance.sanitizer_version, 1, 100)) errors.push("provenance.sanitizer_version is required");
     if (!Array.isArray(v.provenance.evidence_refs) || v.provenance.evidence_refs.length > 256) errors.push("provenance.evidence_refs must be an array");
     else for (const [index, ref] of v.provenance.evidence_refs.entries()) {

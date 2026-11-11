@@ -1,0 +1,22 @@
+[Unit]
+Description=Praxis Stack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/apps/praxis
+EnvironmentFile=%h/.config/praxis/env
+Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PRAXIS_DATA_DIR=%h/.local/state/praxis
+ExecStart=/usr/bin/env bun src/main.ts
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/praxis
+
+[Install]
+WantedBy=default.target

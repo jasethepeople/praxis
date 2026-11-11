@@ -11,7 +11,11 @@
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit --pretty false",
     "build": "bun build src/main.ts --target=bun --outdir=.build",
-    "check": "bun run typecheck && bun test && bun run build"
+    "check": "bun run typecheck && bun test && bun run build",
+    "demo": "bun scripts/demo-sidecar.ts",
+    "eval": "bun scripts/eval-sidecar.ts",
+    "sidecar:miner": "bun sidecar/miner-sidecar.ts",
+    "sidecar:embedder": "bun sidecar/embedder-sidecar.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",

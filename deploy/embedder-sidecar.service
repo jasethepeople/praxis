@@ -1,0 +1,23 @@
+[Unit]
+Description=Praxis embedder sidecar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/apps/praxis
+EnvironmentFile=%h/.config/praxis/env
+Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=EMBEDDER_SIDECAR_PORT=8792
+Environment=EMBEDDER_SIDECAR_CACHE_DIR=%h/.local/state/praxis/embedder-cache
+ExecStart=/usr/bin/env bun sidecar/embedder-sidecar.ts
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/praxis/embedder-cache
+
+[Install]
+WantedBy=default.target

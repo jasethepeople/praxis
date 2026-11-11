@@ -18,6 +18,8 @@ export interface Config {
   embedderUrl?: string;
   embedderModel?: string;
   embedderModelSha?: string;
+  embedderToken?: string;
+  embedderTimeoutMs: number;
   minerUrl?: string;
   minerToken?: string;
   minerModelSha?: string;
@@ -35,6 +37,8 @@ export interface Config {
   tier0AuditRate: number;
 }
 
+const hexDigestPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
 function required(name: string, value: string | undefined): string {
   if (!value) throw new Error(`${name} must be set`);
   if (Buffer.byteLength(value) < 32) throw new Error(`${name} must contain at least 32 bytes`);
@@ -44,8 +48,8 @@ function required(name: string, value: string | undefined): string {
 function loopbackServiceUrl(name: string, raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   const url = new URL(raw);
-  if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname) || url.protocol !== "http:" || url.username || url.password) {
-    throw new Error(`${name} must use plain HTTP on loopback only, without embedded credentials`);
+  if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname) || url.protocol !== "http:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    throw new Error(`${name} must be a loopback HTTP origin without credentials, path, query, or fragment`);
   }
   return url.toString().replace(/\/$/, "");
 }
@@ -76,16 +80,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error("Binding to 0.0.0.0 requires PRAXIS_PUBLIC_BEHIND_TLS=true and a trusted TLS reverse proxy");
   }
 
+  const embedderUrl = loopbackServiceUrl("PRAXIS_EMBEDDER_URL", env.PRAXIS_EMBEDDER_URL);
   const model = env.PRAXIS_EMBEDDER_MODEL;
-  const modelSha = env.PRAXIS_EMBEDDER_MODEL_SHA;
+  const modelSha = env.PRAXIS_EMBEDDER_MODEL_SHA?.toLowerCase();
   if ((model && !modelSha) || (!model && modelSha)) throw new Error("PRAXIS_EMBEDDER_MODEL and PRAXIS_EMBEDDER_MODEL_SHA must be set together");
-  if (modelSha && !/^[0-9a-f]{40}$/i.test(modelSha)) throw new Error("PRAXIS_EMBEDDER_MODEL_SHA must be a 40-character SHA");
+  if (model && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(model)) throw new Error("PRAXIS_EMBEDDER_MODEL must be a bounded model identifier");
+  if (modelSha && !hexDigestPattern.test(modelSha)) throw new Error("PRAXIS_EMBEDDER_MODEL_SHA must be a 40- or 64-character hex digest");
+  const embedderToken = env.PRAXIS_EMBEDDER_TOKEN;
+  if (embedderToken !== undefined && Buffer.byteLength(embedderToken) < 32) throw new Error("PRAXIS_EMBEDDER_TOKEN must contain at least 32 bytes when set");
+  if (embedderUrl && (!model || !modelSha || !embedderToken)) throw new Error("PRAXIS_EMBEDDER_URL requires a model, a 40- or 64-character model digest, and PRAXIS_EMBEDDER_TOKEN (32+ bytes)");
 
   const executionBackend = env.PRAXIS_EXECUTION_BACKEND ?? "stub";
   if (executionBackend !== "stub" && executionBackend !== "t340") throw new Error("PRAXIS_EXECUTION_BACKEND must be stub or t340");
   const minerUrl = loopbackServiceUrl("PRAXIS_MINER_URL", env.PRAXIS_MINER_URL);
   const minerModelSha = env.PRAXIS_MINER_MODEL_SHA?.toLowerCase();
-  if (minerUrl && (!env.PRAXIS_MINER_TOKEN || Buffer.byteLength(env.PRAXIS_MINER_TOKEN) < 32 || !minerModelSha || !/^[0-9a-f]{40}$/.test(minerModelSha))) throw new Error("PRAXIS_MINER_URL requires PRAXIS_MINER_TOKEN (32+ bytes) and PRAXIS_MINER_MODEL_SHA (40 hex characters)");
+  if (minerUrl && (!env.PRAXIS_MINER_TOKEN || Buffer.byteLength(env.PRAXIS_MINER_TOKEN) < 32 || !minerModelSha || !hexDigestPattern.test(minerModelSha))) throw new Error("PRAXIS_MINER_URL requires PRAXIS_MINER_TOKEN (32+ bytes) and PRAXIS_MINER_MODEL_SHA (a 40- or 64-character hex digest)");
 
   const t340Url = loopbackServiceUrl("PRAXIS_T340_URL", env.PRAXIS_T340_URL);
   if (executionBackend === "t340" && (!t340Url || !env.PRAXIS_T340_TOKEN || Buffer.byteLength(env.PRAXIS_T340_TOKEN) < 32)) {
@@ -115,9 +124,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     foundryPublicKeyPath: env.FOUNDRY_PUBLIC_KEY_PATH ? resolve(env.FOUNDRY_PUBLIC_KEY_PATH) : undefined,
     gatewayPublicKeyPath: env.GATEWAY_PUBLIC_KEY_PATH ? resolve(env.GATEWAY_PUBLIC_KEY_PATH) : undefined,
     approverRegistryPath: env.PRAXIS_APPROVER_REGISTRY_PATH ? resolve(env.PRAXIS_APPROVER_REGISTRY_PATH) : undefined,
-    embedderUrl: loopbackServiceUrl("PRAXIS_EMBEDDER_URL", env.PRAXIS_EMBEDDER_URL),
+    embedderUrl,
     embedderModel: model,
     embedderModelSha: modelSha?.toLowerCase(),
+    embedderToken: embedderToken,
+    embedderTimeoutMs: boundedNumber("PRAXIS_EMBEDDER_TIMEOUT_MS", env.PRAXIS_EMBEDDER_TIMEOUT_MS, 30_000, 100, 120_000),
     minerUrl,
     minerToken: env.PRAXIS_MINER_TOKEN,
     minerModelSha,

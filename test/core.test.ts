@@ -40,6 +40,7 @@ function testConfig(dataDir: string, overrides: Partial<Config> = {}): Config {
     foundrySigningKeyPath: join(dataDir, "foundry-ed25519.pem"),
     gatewaySigningKeyPath: join(dataDir, "gateway-ed25519.pem"),
     executionBackend: "stub",
+    embedderTimeoutMs: 30_000,
     maxBodyBytes: 1_048_576,
     maxMoltImportBytes: 24_000_000,
     maxQueryCandidates: 200,

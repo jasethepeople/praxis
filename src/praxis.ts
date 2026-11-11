@@ -62,7 +62,7 @@ function normalizedContract(input: unknown, trajectoryHash: string): SkillContra
   if (!record(input)) throw new Error("Miner did not return a contract object");
   const source = input as unknown as Partial<SkillContract>;
   const provenance: Record<string, unknown> = record(source.provenance) ? source.provenance : {};
-  const modelSha = typeof provenance.extraction_model_sha === "string" && /^[0-9a-f]{40}$/i.test(provenance.extraction_model_sha)
+  const modelSha = typeof provenance.extraction_model_sha === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(provenance.extraction_model_sha)
     ? provenance.extraction_model_sha.toLowerCase()
     : extractionModelSha();
   const contract = {
@@ -325,7 +325,7 @@ export class PraxisService {
   }
 
   addEmbedding(input: { skill_id: string; contract_hash: string; model: string; model_sha: string; vector: unknown; activate?: boolean }): { dims: number; active: boolean } {
-    if (!/^[0-9a-f]{40}$/i.test(input.model_sha) || !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$/.test(input.model)) throw new Error("Invalid embedding model identity");
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(input.model_sha) || !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$/.test(input.model)) throw new Error("Invalid embedding model identity");
     const contract = this.db.sqlite.query("SELECT contract_hash,state FROM contracts WHERE skill_id=?").get(input.skill_id) as { contract_hash: string; state: string } | null;
     if (!contract || contract.state !== "canonical" || contract.contract_hash !== input.contract_hash) throw new Error("Embedding must reference the exact hash of a canonical contract");
     const vector = safeVector(input.vector);
@@ -383,10 +383,10 @@ export class PraxisService {
       if (cached) this.queryEmbeddingCache.delete(cacheKey);
       const response = await fetch(`${this.config.embedderUrl}/embed`, {
         method: "POST",
-        headers: { "content-type": "application/json", accept: "application/json" },
+        headers: { "content-type": "application/json", accept: "application/json", ...(this.config.embedderToken ? { authorization: `Bearer ${this.config.embedderToken}` } : {}) },
         body: JSON.stringify({ model, model_sha: modelSha, texts: [query] }),
         redirect: "error",
-        signal: AbortSignal.timeout(30),
+        signal: AbortSignal.timeout(this.config.embedderTimeoutMs),
       });
       if (!response.ok) return undefined;
       const payload = await boundedJson(response, 1_000_000);

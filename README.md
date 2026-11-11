@@ -46,7 +46,7 @@ bun run check
 bun run start
 ```
 
-By default, the service binds only to `127.0.0.1:8787`, uses `data/praxis.sqlite`, creates separate Foundry and Gateway Ed25519 keys with mode `0600`, and keeps real execution disabled. Health endpoints are `GET /healthz` and `GET /readyz`; API documentation is `GET /openapi.json`.
+By default, the service binds only to loopback on port `8787`, uses `data/praxis.sqlite`, creates separate Foundry and Gateway Ed25519 keys with mode `0600`, and keeps real execution disabled. Health endpoints are `GET /healthz` and `GET /readyz`; API documentation is `GET /openapi.json`.
 
 `bun run seed` is an optional, never-automatic demo bootstrap that adds three signed tier-0 skills. Stop the service first; it refuses to run unless the database has no contracts, events, or prior ingests. The stub executor still blocks execution.
 
@@ -59,7 +59,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Do not set `PRAXIS_BIND_HOST=0.0.0.0` outside a trusted TLS reverse-proxy deployment. The service refuses that bind unless `PRAXIS_PUBLIC_BEHIND_TLS=true`. Back up the database and both signing keys together. For a simple consistent backup, stop the service first, archive the complete data directory/volume, then restart it. Keep at least one encrypted off-host backup; losing a signing key makes its historical signatures unverifiable under the original identity.
+Do not bind `PRAXIS_BIND_HOST` to a wildcard network interface outside a trusted TLS reverse-proxy deployment. The service refuses that bind unless `PRAXIS_PUBLIC_BEHIND_TLS=true`. Back up the database and both signing keys together. For a simple consistent backup, stop the service first, archive the complete data directory/volume, then restart it. Keep at least one encrypted off-host backup; losing a signing key makes its historical signatures unverifiable under the original identity.
 
 ## Trust and promotion workflow
 
@@ -77,11 +77,11 @@ All write APIs require the appropriate bearer token, except approval and outcome
 6. Retrieve through `POST /api/v1/praxis/recommend`, MCP `skill_recommend`, A2A `message/send`, or `@praxis` in a MOLT room.
 7. The Gateway verifies the contract before execution and signs `skill.used`. Its output-spec verifier—not the executing agent—assigns the outcome. `blocked` and `unverified` do not count as success or failure; self-reports receive 0.25 weight.
 
-To register a human approver, create an Ed25519 keypair with the CLI below, then send its public PEM to `POST /api/v1/foundry/approvers` with the Foundry token. Keep the private key outside the repository and readable only by its owner.
+To register a human approver, create an Ed25519 keypair with the CLI below, then send its public PEM to `POST /api/v1/foundry/approvers` with the Foundry token. Keep the private key outside the repository and readable only by its owner. Set `APPROVER_KEY_FILE` and `APPROVAL_PAYLOAD_FILE` to owner-only locations on the target system.
 
 ```sh
-bun scripts/sign-payload.ts --keygen APPROVER_ID /secure/path/approver.pem
-bun scripts/sign-payload.ts --sign /secure/path/approver.pem /secure/path/payload.json
+bun scripts/sign-payload.ts --keygen APPROVER_ID "$APPROVER_KEY_FILE"
+bun scripts/sign-payload.ts --sign "$APPROVER_KEY_FILE" "$APPROVAL_PAYLOAD_FILE"
 ```
 
 The first command prints the public key once. The signing command reads a JSON payload file and prints the signed JSON. Approval payloads must include `approval_id`, `contract_hash`, `approver_id`, `decision`, and an ISO timestamp in `signed_at`; use `approval_<ULID>` for the ID. For a quarantine review, sign the exact fields returned/required by the review endpoint; never include the private key in a request.
@@ -109,7 +109,7 @@ All HTTP request bodies have a configurable size limit. The API has per-client/p
 
 ## Retrieval, embeddings, and data
 
-Without an embedder, retrieval uses FTS5 plus derived statistics and reports `retrieval_mode: "lexical"`. To enable semantic search, configure a loopback embedder URL and a pinned model name plus 40-hex model SHA. Query embeddings have a bounded in-memory TTL/LRU cache. Each model/SHA pair has its own partition; Lookup uses RRF across partitions and never compares raw cosine scores across models.
+Without an embedder, retrieval uses FTS5 plus derived statistics and reports `retrieval_mode: "lexical"`. To enable semantic search, configure the loopback embedder URL, model identifier, full 64-hex ONNX SHA-256, and a distinct 32+ byte bearer token. Query embeddings have a bounded in-memory TTL/LRU cache. Each model/SHA pair has its own partition; Lookup uses RRF across partitions and never compares raw cosine scores across models.
 
 SQLite holds immutable canonical contracts and signed events alongside rebuildable stats, FTS, and embedding caches. `GET /api/v1/foundry/verify` verifies the ledger and caches. If only derived state is damaged, `POST /api/v1/foundry/rebuild` verifies the signed source of truth, replays outcomes, and rebuilds derived state; it refuses to rebuild from an invalid ledger. Startup performs the same verification, repairs only rebuildable state, and refuses to serve if signed history is invalid.
 
