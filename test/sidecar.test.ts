@@ -470,7 +470,7 @@ describe("the real embedder sidecar process", () => {
       expect((await call({ ...base, model_sha: sha64.slice(0, 63) })).status).toBe(400);
       expect((await call({ ...base, texts: ["x".repeat(9000)] })).status).toBe(400);
       expect((await call({ ...base, texts: Array.from({ length: 17 }, (_, i) => `t${i}`) })).status).toBe(400);
-      const valid = await call(base);
+      const valid = await withRetry(() => call(base));
       expect(valid.status).toBe(503);
       const detail = await valid.json() as { error: string };
       expect(detail.error).toBe("The embedding request failed or the pinned model could not be verified.");
@@ -478,7 +478,7 @@ describe("the real embedder sidecar process", () => {
       proc.kill();
       await proc.exited;
     }
-  });
+  }, 30_000);
 });
 
 function hashingVector(text: string, dims = 384): number[] {

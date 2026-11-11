@@ -39,8 +39,7 @@ function validIsoTimestamp(value: string): boolean {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 
-export function makeEvent(identity: SigningIdentity, type: string, payload: Record<string, unknown>): SignedEvent {
-  const timestamp = new Date().toISOString();
+export function makeEvent(identity: SigningIdentity, type: string, payload: Record<string, unknown>, timestamp = new Date().toISOString()): SignedEvent {
   const signedPayload = type === "skill.used" ? { ...payload, timestamp } : payload;
   return signEvent(identity, { event_type: type, event_id: newEventId(), timestamp, payload: signedPayload });
 }

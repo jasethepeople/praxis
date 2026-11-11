@@ -89,7 +89,7 @@ export class Foundry {
   setToolPolicy(toolId: string, riskTier: RiskTier, enabled = true): void {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,159}$/.test(toolId) || ![0, 1, 2].includes(riskTier) || typeof enabled !== "boolean") throw new Error("Invalid tool policy");
     const updatedAt = new Date().toISOString();
-    const event = makeEvent(this.identity, "tool.policy_set", { tool_id: toolId, risk_tier: riskTier, enabled, updated_at: updatedAt });
+    const event = makeEvent(this.identity, "tool.policy_set", { tool_id: toolId, risk_tier: riskTier, enabled, updated_at: updatedAt }, updatedAt);
     this.db.sqlite.transaction(() => {
       this.ledger.append(event, "foundry");
       this.db.sqlite.query(`INSERT INTO tool_registry(tool_id,risk_tier,enabled,updated_at) VALUES(?,?,?,?)
@@ -132,12 +132,13 @@ export class Foundry {
     if (!row) throw new Error("Approver not found");
     if (row.enabled !== 1) return;
     const publicKey = createPublicKey(row.public_key_pem);
+    const disabledAt = new Date().toISOString();
     const event = makeEvent(this.identity, "approver.disabled", {
       approver_id: approverId,
       public_key_pem: row.public_key_pem,
       key_fingerprint: sha256(publicKey.export({ type: "spki", format: "der" })),
-      disabled_at: new Date().toISOString(),
-    });
+      disabled_at: disabledAt,
+    }, disabledAt);
     this.db.sqlite.transaction(() => {
       this.ledger.append(event, "foundry");
       this.db.sqlite.query("UPDATE approval_keys SET enabled=0 WHERE approver_id=? AND enabled=1").run(approverId);
